@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MarketVault — Upstox Data Downloader</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{
+  --bg:#0a0d14;--surface:#111620;--surface2:#161c2a;--surface3:#1c2438;
+  --border:#1e2d45;--border2:#243352;
+  --accent:#00e5ff;--accent2:#0097a7;--adim:rgba(0,229,255,0.08);
+  --green:#00e676;--red:#ff1744;--yellow:#ffea00;
+  --text:#e0e8f8;--text2:#7a8fae;--text3:#3d5070;
+  --mono:'Space Mono',monospace;--body:'DM Sans',sans-serif;
+  --r:8px;--rl:14px;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;}
+body{background:var(--bg);color:var(--text);font-family:var(--body);font-size:14px;display:flex;flex-direction:column;overflow:hidden;}
+
+/* scanline */
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.035) 2px,rgba(0,0,0,0.035) 4px);pointer-events:none;z-index:9999;}
+
+/* HEADER */
+header{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:56px;background:var(--surface);border-bottom:1px solid var(--border);}
+.logo{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:14px;font-weight:700;letter-spacing:.06em;color:var(--accent);}
+.logo-hex{width:26px;height:26px;background:var(--accent);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;}
+.logo-hex svg{width:12px;height:12px;fill:#000;}
+.hdr-right{display:flex;align-items:center;gap:10px;}
+.conn-pill{font-family:var(--mono);font-size:11px;padding:4px 12px;border-radius:100px;border:1px solid;display:flex;align-items:center;gap:6px;cursor:pointer;transition:all .2s;user-select:none;}
+.conn-pill.off{color:var(--text2);border-color:var(--border);background:transparent;}
+.conn-pill.off:hover{border-color:var(--accent);color:var(--accent);}
+.conn-pill.on{color:var(--green);border-color:rgba(0,230,118,.3);background:rgba(0,230,118,.06);}
+.cdot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+.cdot.pulse{animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* LAYOUT */
+.wrap{flex:1;display:grid;grid-template-columns:310px 1fr;overflow:hidden;}
+
+/* SIDEBAR */
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;}
+.sb-sec{padding:18px 16px;border-bottom:1px solid var(--border);}
+.slabel{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--text3);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.slabel::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* inputs */
+.ig{margin-bottom:10px;}
+.il{font-size:11px;color:var(--text2);margin-bottom:4px;display:block;font-family:var(--mono);}
+.ifield,.sfield{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);padding:8px 11px;font-family:var(--body);font-size:13px;outline:none;transition:border-color .18s,box-shadow .18s;appearance:none;-webkit-appearance:none;}
+.ifield:focus,.sfield:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--adim);}
+select.sfield option{background:#1a2238;}
+
+/* search dropdown */
+.srwrap{position:relative;}
+.srdrop{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface2);border:1px solid var(--border2);border-radius:var(--r);max-height:220px;overflow-y:auto;z-index:200;display:none;box-shadow:0 8px 32px rgba(0,0,0,.5);}
+.srdrop.open{display:block;}
+.sri{padding:8px 11px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:2px;transition:background .12s;}
+.sri:last-child{border-bottom:none;}
+.sri:hover{background:var(--surface3);}
+.sri-name{font-size:12px;font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px;}
+.sri-meta{font-size:10px;color:var(--text2);font-family:var(--mono);}
+.tag{padding:1px 5px;border-radius:3px;font-size:9px;font-family:var(--mono);font-weight:700;}
+.tce{background:rgba(0,230,118,.15);color:var(--green);}
+.tpe{background:rgba(255,23,68,.15);color:var(--red);}
+.tfu{background:rgba(255,234,0,.15);color:var(--yellow);}
+.teq{background:rgba(0,229,255,.15);color:var(--accent);}
+.tid{background:rgba(156,39,176,.15);color:#ce93d8;}
+
+/* selected box */
+.selbox{background:var(--adim);border:1px solid var(--accent2);border-radius:var(--r);padding:9px 11px;display:none;margin-bottom:10px;}
+.selbox.show{display:block;}
+.sel-sym{font-size:12px;font-weight:600;color:var(--accent);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sel-key{font-family:var(--mono);font-size:9px;color:var(--text2);word-break:break-all;}
+
+/* interval grid */
+.ivgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px;}
+.ivbtn{background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text2);font-family:var(--mono);font-size:11px;font-weight:700;padding:7px 2px;cursor:pointer;text-align:center;transition:all .18s;}
+.ivbtn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);}
+.ivbtn.active{background:var(--accent);border-color:var(--accent);color:#000;}
+.ivbtn:disabled{opacity:.28;cursor:not-allowed;}
+
+/* date row */
+.drow{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+
+/* limit note */
+.lnote{font-size:10px;color:var(--yellow);font-family:var(--mono);margin-top:6px;padding:6px 9px;background:rgba(255,234,0,.04);border:1px solid rgba(255,234,0,.15);border-radius:5px;line-height:1.6;display:none;}
+.lnote.show{display:block;}
+
+/* toggle */
+.trow{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);margin-bottom:10px;cursor:pointer;transition:border-color .18s;}
+.trow:hover{border-color:var(--accent2);}
+.tlabel{font-size:12px;color:var(--text2);}
+.tswitch{width:34px;height:18px;background:var(--border2);border-radius:9px;position:relative;transition:background .2s;flex-shrink:0;}
+.tswitch.on{background:var(--accent);}
+.tthumb{width:12px;height:12px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:left .2s;}
+.tswitch.on .tthumb{left:19px;}
+
+/* expiry */
+.expsec{display:none;}
+.expsec.show{display:block;}
+.exppills{display:flex;flex-wrap:wrap;gap:5px;max-height:110px;overflow-y:auto;}
+.exppill{font-family:var(--mono);font-size:10px;padding:3px 7px;border-radius:4px;border:1px solid var(--border);color:var(--text2);cursor:pointer;transition:all .15s;}
+.exppill:hover{border-color:var(--accent);color:var(--accent);}
+.exppill.sel{background:var(--accent);border-color:var(--accent);color:#000;font-weight:700;}
+
+/* fetch btn */
+.fbtn{width:100%;padding:12px;background:var(--accent);color:#000;border:none;border-radius:var(--r);font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:.08em;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px;text-transform:uppercase;}
+.fbtn:hover:not(:disabled){background:#33eeff;box-shadow:0 0 20px rgba(0,229,255,.3);}
+.fbtn:disabled{background:var(--surface3);color:var(--text3);cursor:not-allowed;}
+.fbtn .spin{width:13px;height:13px;border:2px solid rgba(0,0,0,.25);border-top-color:#000;border-radius:50%;animation:spin .6s linear infinite;display:none;}
+.fbtn.loading .spin{display:block;}
+.fbtn.loading .btxt{display:none;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* CONTENT */
+.content{display:flex;flex-direction:column;overflow:hidden;}
+
+/* toolbar */
+.tbar{flex-shrink:0;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap;gap:8px;}
+.tbar-l{display:flex;align-items:center;gap:14px;}
+.ibadge{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.04em;}
+.stats{display:flex;gap:16px;}
+.stat{display:flex;flex-direction:column;gap:1px;}
+.stat-l{font-size:9px;color:var(--text3);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;}
+.stat-v{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--text);}
+.dlgrp{display:flex;gap:7px;}
+.dlbtn{padding:7px 13px;border-radius:var(--r);border:1px solid;font-family:var(--mono);font-size:11px;font-weight:700;cursor:pointer;transition:all .18s;letter-spacing:.05em;}
+.dlbtn:disabled{opacity:.25;cursor:not-allowed;}
+.dcsv{color:var(--green);border-color:rgba(0,230,118,.3);background:rgba(0,230,118,.06);}
+.dcsv:hover:not(:disabled){background:rgba(0,230,118,.15);}
+.djsn{color:var(--yellow);border-color:rgba(255,234,0,.3);background:rgba(255,234,0,.06);}
+.djsn:hover:not(:disabled){background:rgba(255,234,0,.15);}
+.dtsv{color:#81d4fa;border-color:rgba(129,212,250,.3);background:rgba(129,212,250,.06);}
+.dtsv:hover:not(:disabled){background:rgba(129,212,250,.15);}
+
+/* progress */
+.prog{height:2px;background:var(--surface3);overflow:hidden;display:none;flex-shrink:0;}
+.prog.show{display:block;}
+.progf{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));transition:width .3s;border-radius:2px;}
+
+/* chart */
+.chartbox{flex:1;position:relative;min-height:0;}
+#chartEl{width:100%;height:100%;}
+.cempty{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none;}
+.cempty svg{width:44px;height:44px;opacity:.2;stroke:var(--text3);}
+.ce-t{font-family:var(--mono);font-size:12px;color:var(--text3);letter-spacing:.05em;}
+.ce-s{font-size:11px;color:var(--text3);max-width:260px;text-align:center;line-height:1.6;}
+
+/* table */
+.tblbox{flex-shrink:0;height:200px;overflow-y:auto;border-top:1px solid var(--border);}
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;}
+thead tr{background:var(--surface2);position:sticky;top:0;z-index:10;}
+th{padding:7px 13px;text-align:right;color:var(--text3);font-size:9px;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);white-space:nowrap;}
+th:first-child{text-align:left;}
+td{padding:5px 13px;border-bottom:1px solid rgba(30,45,69,.4);white-space:nowrap;text-align:right;}
+td:first-child{text-align:left;}
+tr:hover td{background:var(--surface2);}
+.cup{color:var(--green);}
+.cdn{color:var(--red);}
+.cne{color:var(--text);}
+.tblmsg{padding:20px;text-align:center;color:var(--text3);font-family:var(--mono);font-size:11px;}
+
+/* batch */
+.bsec{padding:14px 16px;}
+.brows{display:flex;flex-direction:column;gap:5px;max-height:130px;overflow-y:auto;margin-top:8px;}
+.brow{display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--surface2);border-radius:5px;}
+.bdot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.bdot.pending{background:var(--text3);}
+.bdot.fetching{background:var(--yellow);animation:pulse 1s infinite;}
+.bdot.done{background:var(--green);}
+.bdot.fail{background:var(--red);}
+.bname{flex:1;font-family:var(--mono);font-size:10px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bsize{font-family:var(--mono);font-size:10px;color:var(--text3);}
+.bact{display:flex;gap:6px;margin-top:8px;}
+.bact .fbtn{font-size:11px;padding:8px;}
+
+/* modal */
+.mbd{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:600;}
+.mbd.open{display:flex;}
+.mbox{background:var(--surface);border:1px solid var(--border2);border-radius:var(--rl);padding:26px;width:420px;max-width:95vw;box-shadow:0 24px 80px rgba(0,0,0,.6);}
+.mtitle{font-family:var(--mono);font-size:15px;font-weight:700;color:var(--accent);margin-bottom:5px;letter-spacing:.04em;}
+.msub{font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:18px;}
+.msteps{display:flex;flex-direction:column;gap:9px;margin-bottom:18px;}
+.mstep{display:flex;gap:11px;align-items:flex-start;}
+.snum{width:20px;height:20px;background:var(--adim);border:1px solid var(--accent2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:9px;font-weight:700;color:var(--accent);flex-shrink:0;margin-top:2px;}
+.stxt{font-size:12px;color:var(--text2);line-height:1.6;}
+.stxt a{color:var(--accent);text-decoration:none;}
+.stxt a:hover{text-decoration:underline;}
+.mig{margin-bottom:14px;}
+.mil{font-size:12px;color:var(--text2);margin-bottom:5px;display:block;font-family:var(--mono);}
+.twrap{position:relative;}
+.teye{position:absolute;right:9px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;padding:0;transition:color .2s;}
+.teye:hover{color:var(--accent);}
+.macts{display:flex;gap:9px;justify-content:flex-end;}
+.mbtn{padding:9px 18px;border-radius:var(--r);font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:.05em;cursor:pointer;transition:all .2s;}
+.mbtn-p{background:var(--accent);color:#000;border:none;}
+.mbtn-p:hover{background:#33eeff;}
+.mbtn-g{background:transparent;color:var(--text2);border:1px solid var(--border);}
+.mbtn-g:hover{border-color:var(--accent);color:var(--accent);}
+
+/* debug panel */
+.dbgpanel{font-family:var(--mono);font-size:10px;color:var(--text2);padding:8px 12px;background:rgba(255,23,68,.04);border:1px solid rgba(255,23,68,.15);border-radius:5px;margin-top:8px;display:none;word-break:break-all;line-height:1.7;}
+.dbgpanel.show{display:block;}
+
+/* toast */
+.toastbox{position:fixed;bottom:20px;right:20px;display:flex;flex-direction:column;gap:7px;z-index:800;}
+.toast{padding:10px 16px;border-radius:var(--r);border:1px solid;font-size:12px;font-family:var(--mono);display:flex;align-items:center;gap:9px;max-width:320px;animation:tin .25s ease;}
+.toast.ok{background:rgba(0,230,118,.1);border-color:rgba(0,230,118,.3);color:var(--green);}
+.toast.err{background:rgba(255,23,68,.1);border-color:rgba(255,23,68,.3);color:var(--red);}
+.toast.info{background:rgba(0,229,255,.1);border-color:rgba(0,229,255,.3);color:var(--accent);}
+@keyframes tin{from{transform:translateX(16px);opacity:0}to{transform:none;opacity:1}}
+
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:var(--surface);}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+::-webkit-scrollbar-thumb:hover{background:var(--accent2);}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-hex"><svg viewBox="0 0 12 12"><polygon points="6,0 12,3 12,9 6,12 0,9 0,3"/></svg></div>
+    MARKETVAULT
+  </div>
+  <div class="hdr-right">
+    <div id="connPill" class="conn-pill off" onclick="openModal()">
+      <div class="cdot" id="connDot"></div>
+      <span id="connTxt">CONNECT</span>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN WRAP -->
+<div class="wrap">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <!-- INSTRUMENT -->
+    <div class="sb-sec">
+      <div class="slabel">Instrument</div>
+
+      <div class="ig">
+        <label class="il">SEARCH SYMBOL</label>
+        <div class="srwrap">
+          <input id="srchInput" class="ifield" type="text" placeholder="NIFTY, BANKNIFTY, RELIANCE..." autocomplete="off" spellcheck="false">
+          <div id="srchDrop" class="srdrop"></div>
+        </div>
+      </div>
+
+      <div id="selBox" class="selbox">
+        <div id="selSym" class="sel-sym">—</div>
+        <div id="selKey" class="sel-key">—</div>
+      </div>
+
+      <div class="ig">
+        <label class="il">TYPE FILTER</label>
+        <select id="typeFilter" class="sfield">
+          <option value="">All Types</option>
+          <option value="CE">CE — Call Option</option>
+          <option value="PE">PE — Put Option</option>
+          <option value="FUT">FUT — Futures</option>
+          <option value="EQ">EQ — Equity</option>
+          <option value="INDEX">INDEX</option>
+        </select>
+      </div>
+
+      <div class="ig">
+        <label class="il">EXCHANGE</label>
+        <select id="exchFilter" class="sfield">
+          <option value="ALL">All Exchanges</option>
+          <option value="NSE">NSE</option>
+          <option value="BSE">BSE</option>
+          <option value="MCX">MCX</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- EXPIRED -->
+    <div class="sb-sec">
+      <div class="slabel">Expired Contracts</div>
+      <div class="trow" id="expiredToggleRow" onclick="toggleExpired()">
+        <span class="tlabel">Fetch Expired Contract Data</span>
+        <div id="expiredSw" class="tswitch"><div class="tthumb"></div></div>
+      </div>
+      <div id="expSec" class="expsec">
+        <label class="il">EXPIRY DATE</label>
+        <div id="expPills" class="exppills">
+          <span style="color:var(--text3);font-size:11px;">Select an instrument first</span>
+        </div>
+        <div id="dbgExp" class="dbgpanel"></div>
+      </div>
+    </div>
+
+    <!-- TIMEFRAME -->
+    <div class="sb-sec">
+      <div class="slabel">Timeframe &amp; Range</div>
+
+      <div class="ig">
+        <label class="il">INTERVAL</label>
+        <div class="ivgrid">
+          <button class="ivbtn" data-iv="1minute" onclick="pickInterval(this)">1m</button>
+          <button class="ivbtn" data-iv="3minute" onclick="pickInterval(this)">3m</button>
+          <button class="ivbtn" data-iv="5minute" onclick="pickInterval(this)">5m</button>
+          <button class="ivbtn" data-iv="15minute" onclick="pickInterval(this)">15m</button>
+          <button class="ivbtn" data-iv="30minute" onclick="pickInterval(this)">30m</button>
+          <button class="ivbtn active" data-iv="day" onclick="pickInterval(this)">1D</button>
+          <button class="ivbtn" data-iv="week" onclick="pickInterval(this)">1W</button>
+          <button class="ivbtn" data-iv="month" onclick="pickInterval(this)">1M</button>
+        </div>
+        <div id="lnote" class="lnote">⚠ 1m/3m/5m/15m: Upstox returns only 1 month per call. Batch for longer history.</div>
+      </div>
+
+      <div class="ig">
+        <label class="il">DATE RANGE</label>
+        <div class="drow">
+          <div><label class="il" style="font-size:9px;">FROM</label><input id="fromDate" class="ifield" type="date"></div>
+          <div><label class="il" style="font-size:9px;">TO</label><input id="toDate" class="ifield" type="date"></div>
+        </div>
+      </div>
+
+      <button id="fetchBtn" class="fbtn" onclick="doFetch()">
+        <div class="spin"></div><span class="btxt">▶ FETCH DATA</span>
+      </button>
+
+      <div id="dbgFetch" class="dbgpanel"></div>
+    </div>
+
+    <!-- BATCH -->
+    <div class="bsec">
+      <div class="slabel">Batch Download</div>
+      <button class="fbtn" style="background:var(--surface3);color:var(--accent);border:1px solid var(--border2);font-size:11px;padding:8px;" onclick="addBatch()">+ ADD TO BATCH</button>
+      <div id="brows" class="brows">
+        <div class="brow"><span class="bname" style="color:var(--text3);text-align:center;display:block;width:100%;">Queue empty</span></div>
+      </div>
+      <div class="bact">
+        <button id="runBatchBtn" class="fbtn" style="background:var(--surface3);color:var(--green);border:1px solid rgba(0,230,118,.3);font-size:11px;padding:8px;" onclick="runBatch()">▶ RUN</button>
+        <button class="fbtn" style="background:var(--surface3);color:var(--red);border:1px solid rgba(255,23,68,.3);font-size:11px;padding:8px;width:auto;" onclick="clearBatch()">✕</button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- TOOLBAR -->
+    <div class="tbar">
+      <div class="tbar-l">
+        <div id="ibadge" class="ibadge">— NO INSTRUMENT —</div>
+        <div class="stats">
+          <div class="stat"><div class="stat-l">Candles</div><div id="stC" class="stat-v">—</div></div>
+          <div class="stat"><div class="stat-l">From</div><div id="stF" class="stat-v">—</div></div>
+          <div class="stat"><div class="stat-l">To</div><div id="stT" class="stat-v">—</div></div>
+          <div class="stat"><div class="stat-l">Interval</div><div id="stI" class="stat-v">1D</div></div>
+        </div>
+      </div>
+      <div class="dlgrp">
+        <button id="btnCsv" class="dlbtn dcsv" onclick="dlCSV()" disabled>⬇ CSV</button>
+        <button id="btnJson" class="dlbtn djsn" onclick="dlJSON()" disabled>⬇ JSON</button>
+        <button id="btnTsv" class="dlbtn dtsv" onclick="dlTSV()" disabled>⬇ TSV</button>
+      </div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div id="prog" class="prog"><div id="progF" class="progf" style="width:0%"></div></div>
+
+    <!-- CHART -->
+    <div class="chartbox">
+      <div id="cempty" class="cempty">
+        <svg viewBox="0 0 48 48" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="2,36 14,22 22,28 32,12 46,18"/>
+          <polyline points="2,44 46,44"/>
+        </svg>
+        <div class="ce-t">NO DATA LOADED</div>
+        <div class="ce-s">Search an instrument → set interval &amp; dates → Fetch Data</div>
+      </div>
+      <div id="chartEl"></div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="tblbox">
+      <table>
+        <thead>
+          <tr>
+            <th>TIMESTAMP</th><th>OPEN</th><th>HIGH</th><th>LOW</th><th>CLOSE</th><th>CHG%</th><th>VOLUME</th><th>OI</th>
+          </tr>
+        </thead>
+        <tbody id="tblBody">
+          <tr><td colspan="8" class="tblmsg">No data — fetch an instrument above</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /wrap -->
+
+<!-- AUTH MODAL -->
+<div id="authModal" class="mbd">
+  <div class="mbox">
+    <div class="mtitle">CONNECT TO UPSTOX</div>
+    <div class="msub">Paste your Upstox access token. Stored only in this browser session — never sent anywhere except Upstox API.</div>
+    <div class="msteps">
+      <div class="mstep"><div class="snum">1</div><div class="stxt">Open <a href="https://account.upstox.com/developer/apps" target="_blank">account.upstox.com/developer/apps</a></div></div>
+      <div class="mstep"><div class="snum">2</div><div class="stxt">Click your app → click <strong>Generate Token</strong> (generates a fresh token valid for the day)</div></div>
+      <div class="mstep"><div class="snum">3</div><div class="stxt">Copy and paste it below</div></div>
+    </div>
+    <div class="mig">
+      <label class="mil">ACCESS TOKEN</label>
+      <div class="twrap">
+        <input id="tokInput" class="ifield" type="password" placeholder="eyJ0eXAiOiJKV1Q..." style="padding-right:36px;font-family:var(--mono);font-size:11px;">
+        <button class="teye" id="tokEye" onclick="toggleTok()">👁</button>
+      </div>
+    </div>
+    <div class="macts">
+      <button class="mbtn mbtn-g" onclick="closeModal()">CANCEL</button>
+      <button class="mbtn mbtn-p" onclick="saveToken()">CONNECT →</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toastBox" class="toastbox"></div>
+
+<script>
+// ═══════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════
+var S = {
+  token: sessionStorage.getItem('mv_tok') || '',
+  instrument: null,   // full instrument object from search API
+  chosenInterval: 'day',
+  isExpired: false,
+  chosenExpiry: null, // YYYY-MM-DD
+  candles: [],
+  batch: [],
+  srchTimer: null,
+  chart: null,
+  cSeries: null,
+  vSeries: null
+};
+
+// intervals valid for live vs expired endpoints
+var IV_LIVE    = ['1minute','30minute','day','week','month'];
+var IV_EXPIRED = ['1minute','3minute','5minute','15minute','30minute','day'];
+var IV_SHORT   = ['1minute','3minute','5minute','15minute']; // show limit note
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+(function boot() {
+  var today = new Date();
+  var from3 = new Date(); from3.setMonth(from3.getMonth() - 3);
+  document.getElementById('toDate').value = toYMD(today);
+  document.getElementById('fromDate').value = toYMD(from3);
+
+  if (S.token) setConnected(true);
+
+  document.getElementById('srchInput').addEventListener('input', function() {
+    clearTimeout(S.srchTimer);
+    var q = this.value.trim();
+    if (q.length < 2) { closeDrop(); return; }
+    S.srchTimer = setTimeout(function() { doSearch(q); }, 380);
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('#srchInput') && !e.target.closest('#srchDrop')) closeDrop();
+  });
+
+  initChart();
+  refreshIvBtns();
+})();
+
+function toYMD(d) {
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate());
+}
+function pad(n) { return n < 10 ? '0'+n : ''+n; }
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ═══════════════════════════════════════
+// AUTH MODAL
+// ═══════════════════════════════════════
+function openModal() {
+  document.getElementById('authModal').classList.add('open');
+  if (S.token) document.getElementById('tokInput').value = S.token;
+}
+function closeModal() { document.getElementById('authModal').classList.remove('open'); }
+function toggleTok() {
+  var inp = document.getElementById('tokInput');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+function saveToken() {
+  var t = document.getElementById('tokInput').value.trim();
+  if (!t) { toast('err', 'Token cannot be empty'); return; }
+  S.token = t;
+  sessionStorage.setItem('mv_tok', t);
+  setConnected(true);
+  closeModal();
+  toast('ok', 'Connected — token saved for session');
+}
+function setConnected(yes) {
+  var pill = document.getElementById('connPill');
+  var dot  = document.getElementById('connDot');
+  var txt  = document.getElementById('connTxt');
+  if (yes) {
+    pill.className = 'conn-pill on';
+    dot.className  = 'cdot pulse';
+    txt.textContent = 'CONNECTED';
+  } else {
+    pill.className = 'conn-pill off';
+    dot.className  = 'cdot';
+    txt.textContent = 'CONNECT';
+  }
+}
+
+// ═══════════════════════════════════════
+// INSTRUMENT SEARCH
+// Uses: GET /v2/instruments/search
+// Requires Bearer token
+// ═══════════════════════════════════════
+function doSearch(q) {
+  if (!S.token) { toast('info', 'Connect your token first'); openModal(); return; }
+
+  var params = new URLSearchParams({ query: q, page_number: '1', records: '20' });
+
+  var exch = document.getElementById('exchFilter').value;
+  if (exch !== 'ALL') params.set('exchanges', exch);
+
+  var typ = document.getElementById('typeFilter').value;
+  if (typ) params.set('instrument_types', typ);
+
+  fetch('https://api.upstox.com/v2/instruments/search?' + params, {
+    headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + S.token }
+  })
+  .then(function(r) {
+    if (!r.ok) return r.json().then(function(d) { throw new Error(errMsg(d)); });
+    return r.json();
+  })
+  .then(function(d) {
+    if (d.status !== 'success') throw new Error(errMsg(d));
+    renderDrop(d.data || []);
+  })
+  .catch(function(e) { toast('err', 'Search: ' + e.message); closeDrop(); });
+}
+
+function renderDrop(items) {
+  var el = document.getElementById('srchDrop');
+  if (!items.length) {
+    el.innerHTML = '<div class="sri"><div class="sri-name" style="color:var(--text3)">No results</div></div>';
+    el.classList.add('open');
+    return;
+  }
+  // Store items in a global registry keyed by index so onclick doesn't need JSON embedding
+  window._srItems = items;
+  var html = items.slice(0, 25).map(function(item, i) {
+    var tag = mkTag(item.instrument_type);
+    var meta = [item.segment];
+    if (item.expiry) meta.push(item.expiry);
+    if (item.strike_price && item.strike_price > 0) meta.push('₹' + item.strike_price);
+    if (item.lot_size) meta.push('Lot:' + item.lot_size);
+    return '<div class="sri" onclick="pickInst('+i+')">' +
+      '<div class="sri-name">' + esc(item.trading_symbol || item.name || '') + ' ' + tag + '</div>' +
+      '<div class="sri-meta">' + esc(meta.join(' · ')) + '</div>' +
+      '</div>';
+  }).join('');
+  el.innerHTML = html;
+  el.classList.add('open');
+}
+
+function pickInst(i) {
+  var item = window._srItems[i];
+  if (!item) return;
+  S.instrument = item;
+  S.chosenExpiry = null;
+
+  document.getElementById('selSym').textContent = item.trading_symbol || item.name;
+  document.getElementById('selKey').textContent = item.instrument_key;
+  document.getElementById('selBox').classList.add('show');
+  document.getElementById('ibadge').textContent = item.trading_symbol || item.name;
+  document.getElementById('srchInput').value = item.trading_symbol || item.name;
+
+  closeDrop();
+  refreshIvBtns();
+
+  if (S.isExpired) loadExpiries();
+}
+
+function closeDrop() { document.getElementById('srchDrop').classList.remove('open'); }
+
+function mkTag(t) {
+  if (t === 'CE')    return '<span class="tag tce">CE</span>';
+  if (t === 'PE')    return '<span class="tag tpe">PE</span>';
+  if (t === 'FUT')   return '<span class="tag tfu">FUT</span>';
+  if (t === 'INDEX') return '<span class="tag tid">IDX</span>';
+  return '<span class="tag teq">EQ</span>';
+}
+
+function errMsg(d) {
+  if (d && d.errors && d.errors[0] && d.errors[0].message) return d.errors[0].message;
+  if (d && d.message) return d.message;
+  return 'Unknown API error';
+}
+
+// ═══════════════════════════════════════
+// INTERVAL
+// ═══════════════════════════════════════
+function pickInterval(btn) {
+  S.chosenInterval = btn.dataset.iv;
+  document.querySelectorAll('.ivbtn').forEach(function(b) { b.classList.remove('active'); });
+  btn.classList.add('active');
+  document.getElementById('stI').textContent = btn.textContent;
+  // limit note
+  if (IV_SHORT.indexOf(S.chosenInterval) !== -1) {
+    document.getElementById('lnote').classList.add('show');
+  } else {
+    document.getElementById('lnote').classList.remove('show');
+  }
+}
+
+function refreshIvBtns() {
+  var allowed = S.isExpired ? IV_EXPIRED : IV_LIVE;
+  document.querySelectorAll('.ivbtn').forEach(function(btn) {
+    var iv = btn.dataset.iv;
+    var ok = allowed.indexOf(iv) !== -1;
+    btn.disabled = !ok;
+    if (!ok && btn.classList.contains('active')) {
+      // current selection is no longer valid, fall back to 'day'
+      btn.classList.remove('active');
+      S.chosenInterval = 'day';
+      var dayBtn = document.querySelector('[data-iv="day"]');
+      if (dayBtn) dayBtn.classList.add('active');
+      document.getElementById('stI').textContent = '1D';
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// EXPIRED TOGGLE
+// ═══════════════════════════════════════
+function toggleExpired() {
+  S.isExpired = !S.isExpired;
+  var sw = document.getElementById('expiredSw');
+  var sec = document.getElementById('expSec');
+  if (S.isExpired) {
+    sw.classList.add('on');
+    sec.classList.add('show');
+    if (S.instrument) loadExpiries();
+  } else {
+    sw.classList.remove('on');
+    sec.classList.remove('show');
+    S.chosenExpiry = null;
+  }
+  refreshIvBtns();
+}
+
+// GET /v2/expired-instruments/expiries?instrument_key=...
+function loadExpiries() {
+  if (!S.token || !S.instrument) return;
+  var el = document.getElementById('expPills');
+  el.innerHTML = '<span style="color:var(--text3);font-size:11px;">Loading...</span>';
+
+  fetch('https://api.upstox.com/v2/expired-instruments/expiries?instrument_key=' + encodeURIComponent(S.instrument.instrument_key), {
+    headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + S.token }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(d) {
+    var dbg = document.getElementById('dbgExp');
+    if (d.status !== 'success' || !Array.isArray(d.data) || !d.data.length) {
+      el.innerHTML = '<span style="color:var(--text3);font-size:11px;">No expiries found for this instrument</span>';
+      dbg.textContent = 'Response: ' + JSON.stringify(d).slice(0, 200);
+      dbg.classList.add('show');
+      return;
+    }
+    dbg.classList.remove('show');
+    var sorted = d.data.slice().sort().reverse();
+    el.innerHTML = sorted.map(function(exp) {
+      return '<span class="exppill" data-exp="' + exp + '" onclick="pickExpiry(this)">' + exp + '</span>';
+    }).join('');
+  })
+  .catch(function(e) {
+    document.getElementById('expPills').innerHTML = '<span style="color:var(--red);font-size:11px;">Error loading expiries</span>';
+    toast('err', 'Expiries: ' + e.message);
+  });
+}
+
+function pickExpiry(el) {
+  S.chosenExpiry = el.dataset.exp;
+  document.querySelectorAll('.exppill').forEach(function(p) { p.classList.remove('sel'); });
+  el.classList.add('sel');
+}
+
+// ═══════════════════════════════════════
+// FETCH DATA
+// ═══════════════════════════════════════
+function doFetch() {
+  if (!S.token) { openModal(); return; }
+  if (!S.instrument) { toast('err', 'Select an instrument first'); return; }
+  if (S.isExpired && !S.chosenExpiry) { toast('err', 'Select an expiry date'); return; }
+
+  var from = document.getElementById('fromDate').value;
+  var to   = document.getElementById('toDate').value;
+  if (!from || !to) { toast('err', 'Set both From and To dates'); return; }
+  if (from > to) { toast('err', 'From date must be before To date'); return; }
+
+  setFetching(true);
+  setProgress(20);
+
+  var url = buildCandleURL(S.instrument.instrument_key, S.chosenInterval, from, to, S.isExpired, S.chosenExpiry);
+
+  var dbg = document.getElementById('dbgFetch');
+  dbg.textContent = 'GET ' + url;
+  dbg.classList.add('show');
+
+  fetch(url, {
+    headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + S.token }
+  })
+  .then(function(r) {
+    setProgress(70);
+    if (!r.ok) return r.json().then(function(d) { throw new Error('HTTP ' + r.status + ': ' + errMsg(d)); });
+    return r.json();
+  })
+  .then(function(d) {
+    setProgress(95);
+    if (d.status !== 'success') throw new Error(errMsg(d));
+    var raw = (d.data && d.data.candles) ? d.data.candles : [];
+    if (!raw.length) { toast('info', 'API returned 0 candles for this range/interval'); return; }
+    loadCandles(raw);
+    toast('ok', 'Loaded ' + raw.length + ' candles');
+  })
+  .catch(function(e) {
+    toast('err', e.message);
+    dbg.textContent += '\nERROR: ' + e.message;
+  })
+  .finally(function() {
+    setFetching(false);
+    setTimeout(function() { setProgress(0); document.getElementById('prog').classList.remove('show'); }, 500);
+  });
+}
+
+// ─── URL BUILDER ───────────────────────────────────────────
+// Live:    GET /v2/historical-candle/{instrument_key}/{interval}/{to_date}/{from_date}
+// Expired: GET /v2/expired-instruments/historical-candle/{expired_key}/{interval}/{to_date}/{from_date}
+//          expired_key = instrument_key|DD-MM-YYYY
+function buildCandleURL(instrumentKey, interval, from, to, isExpired, expiry) {
+  var base = 'https://api.upstox.com/v2/';
+  var encKey;
+
+  if (isExpired && expiry) {
+    // convert YYYY-MM-DD → DD-MM-YYYY for expired key format
+    var p = expiry.split('-');
+    var expFmt = p[2] + '-' + p[1] + '-' + p[0];
+    var fullKey = instrumentKey + '|' + expFmt;
+    encKey = encodeURIComponent(fullKey);
+    return base + 'expired-instruments/historical-candle/' + encKey + '/' + interval + '/' + to + '/' + from;
+  } else {
+    encKey = encodeURIComponent(instrumentKey);
+    return base + 'historical-candle/' + encKey + '/' + interval + '/' + to + '/' + from;
+  }
+}
+
+function setFetching(yes) {
+  var btn = document.getElementById('fetchBtn');
+  if (yes) { btn.classList.add('loading'); btn.disabled = true; }
+  else     { btn.classList.remove('loading'); btn.disabled = false; }
+}
+
+function setProgress(pct) {
+  var el = document.getElementById('prog');
+  if (pct > 0) el.classList.add('show');
+  document.getElementById('progF').style.width = pct + '%';
+}
+
+// ═══════════════════════════════════════
+// PROCESS CANDLES
+// Candle array: [timestamp, open, high, low, close, volume, OI]
+// ═══════════════════════════════════════
+function loadCandles(raw) {
+  // sort ascending by timestamp
+  S.candles = raw.slice().sort(function(a, b) {
+    return new Date(a[0]).getTime() - new Date(b[0]).getTime();
+  });
+  updateStats();
+  drawChart();
+  buildTable();
+  ['btnCsv','btnJson','btnTsv'].forEach(function(id) { document.getElementById(id).disabled = false; });
+}
+
+function updateStats() {
+  var c = S.candles;
+  document.getElementById('stC').textContent = c.length.toLocaleString();
+  if (c.length) {
+    document.getElementById('stF').textContent = c[0][0].substring(0,10);
+    document.getElementById('stT').textContent = c[c.length-1][0].substring(0,10);
+  }
+}
+
+// ═══════════════════════════════════════
+// CHART  (LightweightCharts v4)
+// ═══════════════════════════════════════
+function initChart() {
+  var el = document.getElementById('chartEl');
+  var box = el.parentElement;
+
+  S.chart = LightweightCharts.createChart(el, {
+    width:  box.clientWidth  || 800,
+    height: box.clientHeight || 400,
+    layout: { background: { color: '#0a0d14' }, textColor: '#7a8fae' },
+    grid:   { vertLines: { color: '#1e2d45' }, horzLines: { color: '#1e2d45' } },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: '#00e5ff', labelBackgroundColor: '#00e5ff' },
+      horzLine: { color: '#00e5ff', labelBackgroundColor: '#00e5ff' }
+    },
+    rightPriceScale: { borderColor: '#1e2d45' },
+    timeScale: { borderColor: '#1e2d45', timeVisible: true, secondsVisible: false }
+  });
+
+  S.cSeries = S.chart.addCandlestickSeries({
+    upColor: '#00e676', downColor: '#ff1744',
+    borderUpColor: '#00e676', borderDownColor: '#ff1744',
+    wickUpColor: '#00e676', wickDownColor: '#ff1744'
+  });
+
+  S.vSeries = S.chart.addHistogramSeries({
+    priceFormat: { type: 'volume' },
+    priceScaleId: 'vol',
+    scaleMargins: { top: 0.82, bottom: 0 }
+  });
+  S.chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+
+  // Resize
+  var ro = new ResizeObserver(function() {
+    var b = document.getElementById('chartEl').parentElement;
+    if (S.chart && b.clientWidth > 0 && b.clientHeight > 0) {
+      S.chart.applyOptions({ width: b.clientWidth, height: b.clientHeight });
+    }
+  });
+  ro.observe(box);
+}
+
+function drawChart() {
+  if (!S.chart || !S.candles.length) return;
+  document.getElementById('cempty').style.display = 'none';
+
+  var cData = S.candles.map(function(c) {
+    // LightweightCharts wants Unix seconds for time
+    return { time: Math.floor(new Date(c[0]).getTime() / 1000), open: c[1], high: c[2], low: c[3], close: c[4] };
+  });
+  var vData = S.candles.map(function(c) {
+    return {
+      time: Math.floor(new Date(c[0]).getTime() / 1000),
+      value: c[5],
+      color: c[4] >= c[1] ? 'rgba(0,230,118,0.35)' : 'rgba(255,23,68,0.35)'
+    };
+  });
+
+  S.cSeries.setData(cData);
+  S.vSeries.setData(vData);
+  S.chart.timeScale().fitContent();
+}
+
+// ═══════════════════════════════════════
+// TABLE
+// ═══════════════════════════════════════
+function buildTable() {
+  var tbody = document.getElementById('tblBody');
+  if (!S.candles.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="tblmsg">No data</td></tr>';
+    return;
+  }
+  var maxVol = 0;
+  S.candles.forEach(function(c) { if (c[5] > maxVol) maxVol = c[5]; });
+
+  var display = S.candles.slice().reverse().slice(0, 300);
+  var html = display.map(function(c) {
+    var o=c[1],h=c[2],l=c[3],cl=c[4],vol=c[5],oi=c[6];
+    var pct = o > 0 ? ((cl-o)/o*100).toFixed(2) : '0.00';
+    var cls = cl >= o ? 'cup' : 'cdn';
+    var bar = maxVol > 0 ? Math.round(vol/maxVol*40) : 0;
+    return '<tr>' +
+      '<td>' + fmtTS(c[0]) + '</td>' +
+      '<td class="cne">' + fmtP(o) + '</td>' +
+      '<td class="cup">' + fmtP(h) + '</td>' +
+      '<td class="cdn">' + fmtP(l) + '</td>' +
+      '<td class="' + cls + '">' + fmtP(cl) + '</td>' +
+      '<td class="' + cls + '">' + (pct > 0 ? '+' : '') + pct + '%</td>' +
+      '<td class="cne">' + vol.toLocaleString() + '<span style="display:inline-block;width:'+bar+'px;height:2px;background:var(--accent2);opacity:.4;vertical-align:middle;margin-left:5px;border-radius:1px;"></span></td>' +
+      '<td class="cne">' + (oi > 0 ? oi.toLocaleString() : '—') + '</td>' +
+      '</tr>';
+  }).join('');
+  tbody.innerHTML = html;
+}
+
+function fmtTS(ts) {
+  return new Date(ts).toLocaleString('en-IN', { day:'2-digit', month:'short', year:'2-digit', hour:'2-digit', minute:'2-digit', hour12:false });
+}
+function fmtP(n) { return typeof n === 'number' ? n.toFixed(2) : n; }
+
+// ═══════════════════════════════════════
+// DOWNLOADS
+// ═══════════════════════════════════════
+function fname(ext) {
+  var sym = S.instrument ? S.instrument.trading_symbol.replace(/[^A-Za-z0-9_-]/g,'') : 'data';
+  var f = document.getElementById('fromDate').value;
+  var t = document.getElementById('toDate').value;
+  return sym + '_' + S.chosenInterval + '_' + f + '_' + t + '.' + ext;
+}
+
+function dlCSV() {
+  if (!S.candles.length) return;
+  var lines = ['Timestamp,Open,High,Low,Close,Volume,OI'];
+  S.candles.forEach(function(c) { lines.push([c[0],c[1],c[2],c[3],c[4],c[5],c[6]].join(',')); });
+  dlBlob(new Blob([lines.join('\n')], {type:'text/csv;charset=utf-8;'}), fname('csv'));
+  toast('ok', 'CSV: ' + S.candles.length + ' rows downloaded');
+}
+
+function dlJSON() {
+  if (!S.candles.length) return;
+  var obj = {
+    instrument: S.instrument ? S.instrument.trading_symbol : '',
+    instrument_key: S.instrument ? S.instrument.instrument_key : '',
+    interval: S.chosenInterval,
+    exported_at: new Date().toISOString(),
+    candles: S.candles.map(function(c) {
+      return {timestamp:c[0],open:c[1],high:c[2],low:c[3],close:c[4],volume:c[5],oi:c[6]};
+    })
+  };
+  dlBlob(new Blob([JSON.stringify(obj,null,2)],{type:'application/json'}), fname('json'));
+  toast('ok', 'JSON downloaded');
+}
+
+function dlTSV() {
+  if (!S.candles.length) return;
+  var lines = ['Timestamp\tOpen\tHigh\tLow\tClose\tVolume\tOI'];
+  S.candles.forEach(function(c) { lines.push([c[0],c[1],c[2],c[3],c[4],c[5],c[6]].join('\t')); });
+  dlBlob(new Blob([lines.join('\n')],{type:'text/tab-separated-values;charset=utf-8;'}), fname('tsv'));
+  toast('ok', 'TSV (Excel-ready) downloaded');
+}
+
+function dlBlob(blob, filename) {
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ═══════════════════════════════════════
+// BATCH
+// ═══════════════════════════════════════
+function addBatch() {
+  if (!S.instrument) { toast('err', 'Select an instrument first'); return; }
+  if (S.isExpired && !S.chosenExpiry) { toast('err', 'Select an expiry for expired mode'); return; }
+  var entry = {
+    id: Date.now(),
+    instrument: S.instrument,
+    interval: S.chosenInterval,
+    from: document.getElementById('fromDate').value,
+    to: document.getElementById('toDate').value,
+    isExpired: S.isExpired,
+    expiry: S.chosenExpiry,
+    status: 'pending',
+    count: 0
+  };
+  S.batch.push(entry);
+  renderBatch();
+  toast('info', 'Added: ' + S.instrument.trading_symbol + ' ' + S.chosenInterval);
+}
+
+function renderBatch() {
+  var el = document.getElementById('brows');
+  if (!S.batch.length) {
+    el.innerHTML = '<div class="brow"><span class="bname" style="color:var(--text3);width:100%;text-align:center;">Queue empty</span></div>';
+    return;
+  }
+  el.innerHTML = S.batch.map(function(e) {
+    return '<div class="brow">' +
+      '<div class="bdot ' + e.status + '"></div>' +
+      '<div class="bname">' + esc(e.instrument.trading_symbol) + ' · ' + e.interval + (e.expiry ? ' · '+e.expiry : '') + '</div>' +
+      '<div class="bsize">' + (e.count > 0 ? e.count + 'r' : e.status) + '</div>' +
+      '</div>';
+  }).join('');
+}
+
+function clearBatch() { S.batch = []; renderBatch(); }
+
+// Using promise chain instead of async/await to avoid closure bugs
+function runBatch() {
+  if (!S.token) { openModal(); return; }
+  if (!S.batch.length) { toast('err', 'Batch queue is empty'); return; }
+  var btn = document.getElementById('runBatchBtn');
+  btn.disabled = true;
+
+  var idx = 0;
+  function next() {
+    if (idx >= S.batch.length) {
+      btn.disabled = false;
+      var done = S.batch.filter(function(e) { return e.status === 'done'; }).length;
+      toast('ok', 'Batch done: ' + done + '/' + S.batch.length + ' succeeded');
+      return;
+    }
+    var entry = S.batch[idx];
+    idx++;
+    entry.status = 'fetching';
+    renderBatch();
+
+    var url = buildCandleURL(entry.instrument.instrument_key, entry.interval, entry.from, entry.to, entry.isExpired, entry.expiry);
+    fetch(url, { headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + S.token } })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.status !== 'success') throw new Error(errMsg(d));
+      var rows = (d.data && d.data.candles) || [];
+      entry.count = rows.length;
+      entry.status = 'done';
+      // download CSV
+      var lines = ['Timestamp,Open,High,Low,Close,Volume,OI'];
+      rows.forEach(function(c) { lines.push([c[0],c[1],c[2],c[3],c[4],c[5],c[6]].join(',')); });
+      var sym = entry.instrument.trading_symbol.replace(/[^A-Za-z0-9_-]/g,'');
+      dlBlob(new Blob([lines.join('\n')],{type:'text/csv'}), sym+'_'+entry.interval+'_'+entry.from+'_'+entry.to+'.csv');
+    })
+    .catch(function(e) { entry.status = 'fail'; toast('err', entry.instrument.trading_symbol + ': ' + e.message); })
+    .finally(function() {
+      renderBatch();
+      setTimeout(next, 700); // 700ms gap to respect rate limits
+    });
+  }
+  next();
+}
+
+// ═══════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════
+function toast(type, msg) {
+  var el = document.createElement('div');
+  el.className = 'toast ' + type;
+  var ico = { ok:'✓', err:'✕', info:'ℹ' };
+  el.innerHTML = '<span style="font-weight:700">' + (ico[type]||'·') + '</span> ' + esc(String(msg).substring(0,120));
+  document.getElementById('toastBox').appendChild(el);
+  setTimeout(function() {
+    el.style.transition = 'opacity .3s';
+    el.style.opacity = '0';
+    setTimeout(function() { el.remove(); }, 320);
+  }, 4000);
+}
+</script>
+</body>
+</html>
